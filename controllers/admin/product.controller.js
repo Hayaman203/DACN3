@@ -1,8 +1,10 @@
 const Product = require("../../models/product.model");
+const ProductCategory = require("../../models/product-category.model");
 const systemConfig = require("../../config/system");
 const filterStatusHelper = require("../../helpers/filterStatus");
 const searchHelper = require("../../helpers/search");
 const paginationHelper = require("../../helpers/pagination");
+const createTreeHelper = require("../../helpers/createTree");
 
 // [GET] /admin/products
 module.exports.index = async (req, res) => {
@@ -39,8 +41,18 @@ module.exports.index = async (req, res) => {
   );
   //End Pagination
 
+  // Sort
+  let sort = {};
+
+  if (req.query.sortKey && req.query.sortValue) {
+    sort[req.query.sortKey] = req.query.sortValue;
+  } else {
+    sort.position = "desc";
+  }
+  // End Sort
+
   const products = await Product.find(find)
-    .sort({ position: "desc" })
+    .sort(sort)
     .limit(objectPagination.limitItems)
     .skip(objectPagination.skip);
 
@@ -127,8 +139,17 @@ module.exports.deleteItem = async (req, res) => {
 
 // [GET] /admin/products/create
 module.exports.create = async (req, res) => {
+  const find = {
+    deleted: false,
+  };
+
+  const category = await ProductCategory.find(find);
+
+  const newCategory = createTreeHelper.tree(category);
+
   res.render("admin/pages/products/create", {
     pageTitle: "Thêm mới sản phẩm",
+    category: newCategory,
   });
 };
 
@@ -161,9 +182,16 @@ module.exports.edit = async (req, res) => {
 
     const product = await Product.findOne(find);
 
+    const category = await ProductCategory.find({
+      deleted: false,
+    });
+
+    const newCategory = createTreeHelper.tree(category);
+
     res.render("admin/pages/products/edit", {
       pageTitle: "Chỉnh sửa sản phẩm",
-      product: product
+      product: product,
+      category: newCategory,
     });
   } catch (error) {
     req.flash("error", `Sản phẩm không tồn tại!`);
@@ -201,10 +229,19 @@ module.exports.detail = async (req, res) => {
     };
 
     const product = await Product.findOne(find);
-    
+
+    let category = null;
+    if (product && product.product_category_id) {
+      category = await ProductCategory.findOne({
+        deleted: false,
+        _id: product.product_category_id,
+      });
+    }
+
     res.render("admin/pages/products/detail", {
       pageTitle: product.title,
-      product: product
+      product: product,
+      category: category,
     });
   } catch (error) {
     res.redirect(`${systemConfig.prefixAdmin}/products`);
